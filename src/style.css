@@ -30,17 +30,42 @@
 
 .fruit>span{font-family:"Apple Color Emoji","Segoe UI Emoji","Noto Color Emoji",sans-serif}
 
-/* Three practice entries share the selected number range. */
-.activities{grid-template-columns:repeat(3,minmax(0,1fr))}
-.activities .activity{flex-direction:column;justify-content:center;text-align:center;gap:16px;padding:20px 12px;min-width:0}
+/* A main practice card with three smaller topic cards. */
+.home .activities{grid-template-columns:1.15fr 1fr;grid-template-rows:repeat(3,minmax(0,1fr));max-height:540px;min-height:360px}
+.activities .activity{flex-direction:row;justify-content:flex-start;text-align:left;gap:20px;padding:18px 24px;min-width:0}
+.activities .combined-card{grid-row:1 / 4;flex-direction:column;justify-content:center;text-align:center;gap:24px}
+.activities .combined-card h2{font-size:36px}
+.activities .combined-card .activity-icon{width:100px;height:100px;font-size:60px}
+.activities .activity:not(.combined-card) .activity-icon{width:60px;height:60px;font-size:38px}
 .activities .arrow{display:none}
 .activities .activity h2{font-size:26px}
 .combined-card{background:#396e53;color:white}
 .basic-card{background:#f1e6cd}
 .fill-card{background:#e3ebdb}
+.decompose-card{background:#e2eaf3}
+.decomposition{width:240px;max-width:100%;margin:0 auto 12px;font-size:48px;font-weight:700;line-height:1.15;text-align:center}
+.decomposition-total{height:56px}
+.decomposition-lines{display:block;width:100%;height:52px;fill:none;stroke:#8b9b7f;stroke-width:3;stroke-linecap:round}
+.decomposition-parts{display:grid;grid-template-columns:1fr 1fr;align-items:center;justify-items:center}
+.decomposition-parts b{display:grid;place-items:center;width:82px;height:64px;background:#eaf0dd;border:2px dashed #b6c79f;border-radius:14px;color:#517748}
+.decomposition .box-correct{border-style:solid;border-color:#4caf50;background:#e8f5e9;color:#2e7d32}
+.decomposition .box-wrong{border-style:solid;border-color:#e53935;background:#ffebee;color:#b71c1c}
+.decomposition-hint .fruit-group{padding:6px}
+.decomposition-hint .fruit-group.missing-group{border:2px dashed #b6c79f;border-radius:14px;background:#eaf0dd}
+.decomposition-parts .blank-left{order:-1}
+.decomposition-hint .fruit:disabled{opacity:1}
+.error-grid .decomposition{width:130px;font-size:24px;margin:4px auto}
+.error-grid .decomposition-total{height:28px}
+.error-grid .decomposition-lines{height:24px}
+.error-grid .decomposition-parts b{width:42px;height:32px;border-radius:8px}
+@media(min-width:700px) and (max-width:850px){.activities .activity h2{font-size:22px}.activities .combined-card h2{font-size:32px}.activities .activity p{font-size:12px}.activities .activity{padding:16px;gap:14px}}
+@media(min-width:700px) and (max-height:700px){.home .activities{min-height:300px}.activities .activity{padding:12px 18px;gap:14px}.activities .activity p{margin-top:4px}.activities .activity h2{font-size:23px}.activities .combined-card h2{font-size:32px}}
 @media(max-width:699px){
-  .activities{grid-template-columns:1fr}
+  .home .activities{grid-template-columns:1fr;grid-template-rows:auto;max-height:none;min-height:0}
   .activities .activity{flex-direction:row;text-align:left;justify-content:flex-start;padding:18px;gap:18px}
+  .activities .combined-card{grid-row:auto;min-height:200px;justify-content:center}
+  .activities .combined-card .activity-icon{width:80px;height:80px;font-size:48px}
   .activities .activity h2{font-size:22px}
+  .activities .combined-card h2{font-size:30px}
   .activities .activity p{font-size:12px;margin-top:4px}
 }

@@ -1,4 +1,4 @@
-# 小小数学家 · 数学花园
+# LittleSteps Math · 小小数学家
 
 面向学前儿童的加减法学习应用。参考相邻「单词本」项目的学习、练习、错题复习和学习记录结构，使用 Vue 3、TypeScript、Vite 和 Capacitor，以 Android 平板为主，同时适配手机和网页。
 
@@ -47,19 +47,24 @@ npm run android:sync
 npm run android:open
 ```
 
-在 Android Studio 中等待 Gradle 同步后构建 APK，或在具备 Java 和 Android SDK 的环境运行：
+打包与发布沿用“单词本”项目流程，完整准备、签名和故障排查见 [APK_BUILD_GUIDE.md](APK_BUILD_GUIDE.md)。
 
 ```powershell
-cd android
-.\gradlew.bat assembleDebug
+npm run pack
+npm run share
+npm run release:check
 ```
 
-调试 APK 位于 `android/app/build/outputs/apk/debug/app-debug.apk`。已验证网页构建、出题测试与 Capacitor 工程生成；浏览器检查覆盖 1280×800、1024×768、960×600、800×600、768×1024 的首页、学习、练习、结果、设置和列表分页，无视口溢出。尚未构建 APK、安装真机或验证 Android 语音。
+`pack` 自动递增补丁版本和 Android versionCode，运行测试与构建，生成 `release/little-steps-math-v<版本号>.apk` 和最新副本 `release/little-steps-math.apk`，然后启动局域网扫码分享（端口 5181）。`share` 只重新生成分享入口，不递增版本。
+
+远程发布时，先更新 `RELEASE_NOTES.md` 并打包，提交、推送版本与代码，再执行 `npm run release`。发布到本仓库 GitHub Releases，验证 APK 的 SHA-256 后公开版本，并生成远程下载二维码。`--dry-run` 仅检查本地文件。APK、二维码、缓存和签名密钥不纳入 Git。
+
+APK 使用本机调试签名，适合个人安卓设备安装；覆盖安装需保持签名一致。Android 真机安装和中文语音仍需实机验证。
 
 ## 数据与后续迭代
 
 学习数据保存在本机 localStorage，无账号、服务器或跨设备同步。清除站点数据或卸载应用会丢失记录。浏览器和 APK 的记录彼此独立。
 
-下一阶段可增加数的分合、凑十法/破十法动画、打包内置中文音频，以及 Android 真机验收与 APK 分享流程。
+下一阶段可增加数的分合、凑十法/破十法动画、打包内置中文音频，以及 Android 真机验收。
 
 主要文件：`src/App.vue`（页面与学习状态）、`src/math.ts`（出题规则）、`src/style.css`（响应式样式）、`tests/math.test.mjs`（规则测试）。

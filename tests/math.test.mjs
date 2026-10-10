@@ -17,12 +17,45 @@ test('基础入口只出计算题，填空入口只出缺少运算数字的题',
 })
 
 test('续做匹配练习入口，历史练习归入综合练习', () => {
-  for (const type of ['combined', 'basic', 'fill']) for (const selected of ['combined', 'basic', 'fill']) {
+  for (const type of ['combined', 'basic', 'fill', 'decompose']) for (const selected of ['combined', 'basic', 'fill', 'decompose']) {
     assert.equal(canResume({ limit: 5, review: false, practiceType: type }, 5, selected), type === selected)
   }
   assert.equal(canResume({ limit: 5, review: false }, 5, 'combined'), true)
   assert.equal(canResume({ limit: 5, review: false }, 5, 'basic'), false)
   assert.equal(canResume({ limit: 5, review: false }, 5, 'fill'), false)
+})
+
+test('分解题总数等于两份之和，范围正确且保留独立题型', () => {
+  for (const limit of [5, 10, 20]) for (const mode of ['mixed', '+', '-']) {
+    const round = questions(limit, mode, 10, 'decompose')
+    assert.equal(round.length, 10)
+    assert.equal(new Set(round.map(key)).size, 10)
+    assert.ok(round.some(q => result(q) > (limit === 20 ? 10 : limit === 10 ? 5 : 0)))
+    for (const q of round) {
+      assert.equal(q.kind, 'decompose')
+      assert.equal(q.op, '+')
+      assert.ok(['a', 'b'].includes(q.blank))
+      assert.equal((q.blank === 'a' ? q.b : q.a) + answer(q), result(q))
+      assert.ok(q.a > 0 && answer(q) > 0 && result(q) <= limit)
+      assert.notEqual(key(q), key({ ...q, kind: undefined }))
+      const restored = JSON.parse(JSON.stringify(q))
+      assert.equal(restored.kind, 'decompose')
+      assert.equal(answer(restored), answer(q))
+    }
+  }
+  const example = { a: 1, b: 9, op: '+', blank: 'b', kind: 'decompose' }
+  assert.equal(answer(example), 9)
+  assert.equal(equationText(example), '10 可以分成 1 和 ?')
+  assert.equal(spokenQuestion(example), '10可以分成1和几？')
+  assert.equal(hintDescription(example), '一共 10 个，分出 1 个，另一份有几个？')
+  assert.equal(Array.from({ length: 10 }, (_, i) => i + 1).filter(id => canCountFruit(example, id)).length, 9)
+  const left = { ...example, blank: 'a' }
+  assert.equal(answer(left), 1)
+  assert.equal(equationText(left), '10 可以分成 ? 和 9')
+  assert.equal(spokenQuestion(left), '10可以分成几和9？')
+  assert.equal(hintDescription(left), '一共 10 个，分出 9 个，另一份有几个？')
+  assert.deepEqual(Array.from({ length: 10 }, (_, i) => i + 1).filter(id => canCountFruit(left, id)), [1])
+  assert.equal(countInstruction(left, '小鸡'), '点左边的小鸡，数一数')
 })
 test('各阶段题目不超范围，减法不产生负数，包含零', () => {
   for (const limit of [5, 10, 20]) for (const mode of ['+', '-', 'mixed']) {

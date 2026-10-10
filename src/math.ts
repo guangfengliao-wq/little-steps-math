@@ -1,24 +1,27 @@
 export type Operation = '+' | '-'
 export const ROUND_SIZE = 10
 export type Mode = 'mixed' | Operation
-export type PracticeType = 'combined' | 'basic' | 'fill'
+export type PracticeType = 'combined' | 'basic' | 'fill' | 'decompose'
 export type Blank = 'a' | 'b' | 'result'
-export type Question = { a: number; b: number; op: Operation; blank?: Blank }
+export type Question = { a: number; b: number; op: Operation; blank?: Blank; kind?: 'decompose' }
 export const result = (q: Question) => q.op === '+' ? q.a + q.b : q.a - q.b
 export const answer = (q: Question) => q.blank === 'a' ? q.a : q.blank === 'b' ? q.b : result(q)
-export const key = (q: Question) => `${q.a}${q.op}${q.b}:${q.blank ?? 'result'}`
+export const key = (q: Question) => `${q.kind === 'decompose' ? 'decompose:' : ''}${q.a}${q.op}${q.b}:${q.blank ?? 'result'}`
 export function equationParts(q: Question): Array<number | '?'> {
   return [q.blank === 'a' ? '?' : q.a, q.blank === 'b' ? '?' : q.b, !q.blank || q.blank === 'result' ? '?' : result(q)]
 }
 export function equationText(q: Question) {
+  if (q.kind === 'decompose') return `${result(q)} 可以分成 ${q.blank === 'a' ? '?' : q.a} 和 ${q.blank === 'a' ? q.b : '?'}`
   const [a, b, r] = equationParts(q)
   return `${a} ${q.op === '+' ? '+' : '−'} ${b} = ${r}`
 }
 export function spokenQuestion(q: Question) {
+  if (q.kind === 'decompose') return `${result(q)}可以分成${q.blank === 'a' ? '几' : q.a}和${q.blank === 'a' ? q.b : '几'}？`
   const [a, b, r] = equationParts(q).map(n => n === '?' ? '几' : String(n))
   return `${a}${q.op === '+' ? '加' : '减'}${b}，等于${r}？`
 }
 export function hintDescription(q: Question, unit = '个'): string {
+  if (q.kind === 'decompose') return `一共 ${result(q)} ${unit}，分出 ${q.blank === 'a' ? q.b : q.a} ${unit}，另一份有几${unit}？`
   if (q.op === '+') {
     if (q.blank === 'a') return `一共 ${result(q)} ${unit}，右边 ${q.b} ${unit}，左边有几${unit}？`
     if (q.blank === 'b') return `一共 ${result(q)} ${unit}，左边 ${q.a} ${unit}，右边有几${unit}？`
@@ -62,6 +65,12 @@ export function shuffle<T>(items: T[]): T[] {
 }
 export function questions(limit: number, mode: Mode, count: number, practiceType: PracticeType = 'combined'): Question[] {
   const previousLimit = limit > 10 ? 10 : limit > 5 ? 5 : 0
+  if (practiceType === 'decompose') {
+    const all = shuffle(pool(limit, '+').filter(q => q.a > 0 && q.b > 0))
+    const stageQuestion = all.find(q => result(q) > previousLimit)
+    const picked = stageQuestion ? [stageQuestion, ...all.filter(q => q !== stageQuestion)] : all
+    return shuffle(picked.slice(0, count).map(q => ({ ...q, blank: Math.random() < .5 ? 'a' as const : 'b' as const, kind: 'decompose' as const })))
+  }
   function pick(op: Operation, size: number): Question[] {
     if (size <= 0) return []
     const all = shuffle(pool(limit, op))
