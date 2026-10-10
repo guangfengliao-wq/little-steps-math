@@ -1,0 +1,8 @@
+node_modules/
+dist/
+android/.gradle/
+android/local.properties
+android/**/build/
+*.log
+.qa-browser*/
+.env*
