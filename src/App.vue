@@ -1,6 +1,7 @@
 <script setup lang="ts">
-import { computed, ref, watch, onBeforeUnmount } from 'vue'
+import { computed, ref, watch, onBeforeUnmount, nextTick } from 'vue'
 import Decomposition from './Decomposition.vue'
+import { createDigitFlight } from './digitFlight'
 import { createFeedbackAudio } from './feedbackAudio'
 import { randomCountingIcon } from './countingIcons'
 import { answer, result, key, questions, shuffle, learningExample, canResume, ROUND_SIZE, equationParts, equationText, spokenQuestion, hintDescription, countInstruction, canCountFruit, type Question, type Mode, type PracticeType } from './math'
@@ -43,6 +44,8 @@ const practiceTitle = computed(() => activities.find(item => item.type === (sess
 function resumable(type: PracticeType) { return canResume(session.value, saved.value.limit, type) }
 const q = computed<Question>(() => session.value?.list[session.value.index] ?? { a: 2, b: 1, op: '+' })
 const input = ref('')
+const questionSide = ref<HTMLElement | null>(null)
+const digitFlight = createDigitFlight()
 const feedback = ref('')
 const reaction = ref<'correct' | 'wrong' | ''>('')
 const reactionId = ref(0)
@@ -52,6 +55,7 @@ let confettiTimer: ReturnType<typeof setTimeout> | undefined
 let advanceTimer: ReturnType<typeof setTimeout> | undefined
 let effectsVersion = 0
 function clearEffects() {
+  digitFlight.clear()
   effectsVersion++; clearTimeout(advanceTimer)
   clearTimeout(confettiTimer); confetti.value = []; reaction.value = ''; feedbackAudio.stop()
 }
@@ -70,12 +74,13 @@ function showReaction(correct: boolean) {
   confetti.value = Array.from({ length: 50 }, () => ({ x: 5 + Math.random() * 90, color: colors[Math.floor(Math.random() * colors.length)], tx: `${(Math.random() - .5) * 280}px`, ty: `${-(60 + Math.random() * 160)}px`, rotation: `${Math.random() * 720 - 360}deg`, size: `${6 + Math.random() * 7}px`, delay: `${Math.random() * .25}s`, round: Math.random() > .45 }))
   confettiTimer = setTimeout(() => { confetti.value = [] }, 1300)
 }
-function editAnswer(value: string) {
+function editAnswer(value: string, keepFlight = false) {
+  if (!keepFlight) digitFlight.clear()
   if (session.value?.solved) return
   if (reaction.value === 'wrong') { clearEffects(); feedback.value = ''; input.value = '' }
   input.value = value
 }
-onBeforeUnmount(() => { clearEffects(); feedbackAudio.dispose(); stopSpeech() })
+onBeforeUnmount(() => { clearEffects(); feedbackAudio.dispose(); digitFlight.dispose(); stopSpeech() })
 const hint = ref(false)
 const counted = ref<number[]>([])
 const countingIcon = ref(randomCountingIcon())
@@ -132,10 +137,17 @@ function next() {
     saved.value.records.unshift(record); lastResult.value = record; saved.value.session = null; page.value = 'result'; stopSpeech()
   }
 }
-function digit(n: number) {
+async function digit(n: number, event: MouseEvent) {
   if (session.value?.solved) return
   const current = reaction.value === 'wrong' ? '' : input.value
-  if (current.length < 2) editAnswer(String(Number(current + n)))
+  if (current.length >= 2) return
+  const source = (event.currentTarget as HTMLElement).getBoundingClientRect()
+  editAnswer(String(Number(current + n)), true)
+  void feedbackAudio.tap(n)
+  const token = digitFlight.token()
+  await nextTick()
+  const target = questionSide.value?.querySelector<HTMLElement>('.equation b, .decomposition-parts b')
+  if (target) digitFlight.fly(n, source, target, token)
 }
 function count(n: number) { if (canCountFruit(visual.value, n) && !counted.value.includes(n)) counted.value.push(n) }
 function stopSpeech() { if ('speechSynthesis' in window) window.speechSynthesis.cancel() }
@@ -174,12 +186,12 @@ watch(demoB, () => { demoShow.value = false; counted.value = []; countingIcon.va
     <main v-else-if="page === 'learn' || page === 'practice'" class="lesson">
       <div class="lesson-top"><button class="text-button" @click="navigate('home')">← 返回花园</button><span>{{ page === 'learn' ? `${saved.limit} 以内 · 看图学一学` : `${session?.limit} 以内 · ${session?.review ? '再练一练' : practiceTitle} · 第 ${(session?.index ?? 0) + 1} / ${session?.list.length} 题` }}</span><button class="text-button" @click="speak">♫ 听题目</button></div>
       <div v-if="page === 'practice'" class="progress" aria-label="本轮进度"><i v-for="n in session?.list.length" :key="n" :class="{ done: n <= (session?.index ?? 0) + (session?.solved ? 1 : 0) }"></i></div>
-      <section class="lesson-card" :class="page === 'practice' ? reaction : ''"><div class="confetti-layer" aria-hidden="true"><i v-for="(piece, i) in confetti" :key="`${reactionId}-${i}`" class="confetti-piece" :style="{ left: `${piece.x}%`, background: piece.color, width: piece.size, height: piece.size, borderRadius: piece.round ? '50%' : '2px', animationDelay: piece.delay, '--tx': piece.tx, '--ty': piece.ty, '--rot': piece.rotation }"></i></div><div class="question-side"><Decomposition v-if="q.kind === 'decompose' && page === 'practice'" :total="result(q)" :known="q.blank === 'a' ? q.b : q.a" :blank-left="q.blank === 'a'" :value="filledAnswer" :state="reaction" /><h1 v-else class="equation"><template v-for="(part, index) in parts" :key="index"><span v-if="index > 0">{{ index === 1 ? displayedQuestion.op === '+' ? '+' : '−' : '=' }}</span><b v-if="part === '?'" :key="reactionId" :class="{ 'box-correct': page === 'practice' && session?.solved, 'box-wrong': page === 'practice' && reaction === 'wrong' }">{{ filledAnswer }}</b><template v-else>{{ part }}</template></template></h1>
+      <section class="lesson-card" :class="page === 'practice' ? reaction : ''"><div class="confetti-layer" aria-hidden="true"><i v-for="(piece, i) in confetti" :key="`${reactionId}-${i}`" class="confetti-piece" :style="{ left: `${piece.x}%`, background: piece.color, width: piece.size, height: piece.size, borderRadius: piece.round ? '50%' : '2px', animationDelay: piece.delay, '--tx': piece.tx, '--ty': piece.ty, '--rot': piece.rotation }"></i></div><div ref="questionSide" class="question-side"><Decomposition v-if="q.kind === 'decompose' && page === 'practice'" :total="result(q)" :known="q.blank === 'a' ? q.b : q.a" :blank-left="q.blank === 'a'" :value="filledAnswer" :state="reaction" /><h1 v-else class="equation"><template v-for="(part, index) in parts" :key="index"><span v-if="index > 0">{{ index === 1 ? displayedQuestion.op === '+' ? '+' : '−' : '=' }}</span><b v-if="part === '?'" :key="reactionId" :class="{ 'box-correct': page === 'practice' && session?.solved, 'box-wrong': page === 'practice' && reaction === 'wrong' }">{{ filledAnswer }}</b><template v-else>{{ part }}</template></template></h1>
         <div v-if="page === 'learn'" class="demo-controls"><label>原来有<select v-model.number="demoA"><option v-for="n in saved.limit + 1" :value="n - 1">{{ n - 1 }}</option></select></label><label>变化<select v-model="demoOp"><option value="+">又来了 ＋</option><option value="-">拿走了 −</option></select></label><label>几个<select v-model.number="demoB"><option v-for="n in (demoOp === '+' ? saved.limit - demoA : demoA) + 1" :value="n - 1">{{ n - 1 }}</option></select></label></div>
         <template v-if="page === 'learn' || hint || session?.solved"><p class="visual-description">{{ hintDescription(visual, countingIcon.unit) }}</p><div class="fruit-board" :class="{ 'decomposition-hint': visual.kind === 'decompose' }"><div class="fruit-group" :class="{ 'missing-group': visual.blank === 'a' }"><button v-for="n in visual.a" :key="n" class="fruit" :class="{ removed: visual.op === '-' && n > visual.a - visual.b, counted: counted.includes(n) }" :disabled="!canCountFruit(visual, n)" :aria-label="`数第 ${n} ${countingIcon.unit}${countingIcon.name}`" @click="count(n)"><span aria-hidden="true">{{ countingIcon.emoji }}</span><small v-if="counted.includes(n)">{{ counted.indexOf(n) + 1 }}</small></button><span v-if="!visual.a" class="zero">0 {{ countingIcon.unit }}</span></div><span v-if="visual.op === '+' && visual.kind !== 'decompose'" class="group-plus">+</span><div v-if="visual.op === '+'" class="fruit-group second" :class="{ 'missing-group': visual.blank === 'b' }"><button v-for="n in visual.b" :key="n" class="fruit" :class="{ counted: counted.includes(visual.a + n) }" :disabled="!canCountFruit(visual, visual.a + n)" :aria-label="`数右边第 ${n} ${countingIcon.unit}${countingIcon.name}`" @click="count(visual.a + n)"><span aria-hidden="true">{{ countingIcon.emoji }}</span><small v-if="counted.includes(visual.a + n)">{{ counted.indexOf(visual.a + n) + 1 }}</small></button><span v-if="!visual.b" class="zero">0 {{ countingIcon.unit }}</span></div></div><p class="count-caption">{{ countInstruction(visual, countingIcon.name) }}<span v-if="counted.length"> · 数了 {{ counted.length }} {{ countingIcon.unit }}</span></p></template>
         <button v-else class="hint-button" @click="hint = true">◉ 看图提示</button>
         <div v-if="page === 'learn'" class="demo-actions"><button class="primary" @click="demoShow = true">看看答案</button><button class="secondary" @click="start()">我来试一试 →</button></div>
-      </div><div v-if="page === 'practice'" class="answer-side"><div class="keypad"><button v-for="n in 9" :disabled="session?.solved" @click="digit(n)">{{ n }}</button><button class="erase" :disabled="session?.solved" @click="editAnswer('')">清空</button><button :disabled="session?.solved" @click="digit(0)">0</button><button class="erase" aria-label="删除一位" :disabled="session?.solved" @click="editAnswer(reaction === 'wrong' ? '' : input.slice(0, -1))">⌫</button></div><button v-if="!session?.solved" class="primary submit" :disabled="input === ''" @click="submit">确认 ✓</button><button v-else class="primary submit" disabled>{{ (session?.index ?? 0) + 1 === session?.list.length ? '即将完成 ★' : '即将进入下一题…' }}</button><p class="feedback" :class="{ 'feedback-correct': session?.solved, 'feedback-wrong': reaction === 'wrong' }" aria-live="polite"><span v-if="session?.solved" aria-hidden="true">✓ </span><svg v-else-if="reaction === 'wrong'" :key="reactionId" class="cry-face" viewBox="0 0 80 80" aria-hidden="true"><circle cx="40" cy="40" r="34" fill="#ffe082"/><path d="M21 29l10 3m18 0 10-3" stroke="#795548" stroke-width="3" stroke-linecap="round"/><circle cx="27" cy="39" r="3" fill="#795548"/><circle cx="53" cy="39" r="3" fill="#795548"/><path d="M30 58q10-12 20 0" fill="none" stroke="#795548" stroke-width="3" stroke-linecap="round"/><path class="tear" d="M23 43q-9 13 0 13t0-13" fill="#64b5f6"/><path class="tear tear-right" d="M57 43q-9 13 0 13t0-13" fill="#64b5f6"/></svg>{{ feedback || (session?.solved ? '完成啦！' : '') }}</p></div></section>
+      </div><div v-if="page === 'practice'" class="answer-side"><div class="keypad"><button v-for="n in 9" :disabled="session?.solved" @click="digit(n, $event)">{{ n }}</button><button class="erase" :disabled="session?.solved" @click="editAnswer('')">清空</button><button :disabled="session?.solved" @click="digit(0, $event)">0</button><button class="erase" aria-label="删除一位" :disabled="session?.solved" @click="editAnswer(reaction === 'wrong' ? '' : input.slice(0, -1))">⌫</button></div><button v-if="!session?.solved" class="primary submit" :disabled="input === ''" @click="submit">确认 ✓</button><button v-else class="primary submit" disabled>{{ (session?.index ?? 0) + 1 === session?.list.length ? '即将完成 ★' : '即将进入下一题…' }}</button><p class="feedback" :class="{ 'feedback-correct': session?.solved, 'feedback-wrong': reaction === 'wrong' }" aria-live="polite"><span v-if="session?.solved" aria-hidden="true">✓ </span><svg v-else-if="reaction === 'wrong'" :key="reactionId" class="cry-face" viewBox="0 0 80 80" aria-hidden="true"><circle cx="40" cy="40" r="34" fill="#ffe082"/><path d="M21 29l10 3m18 0 10-3" stroke="#795548" stroke-width="3" stroke-linecap="round"/><circle cx="27" cy="39" r="3" fill="#795548"/><circle cx="53" cy="39" r="3" fill="#795548"/><path d="M30 58q10-12 20 0" fill="none" stroke="#795548" stroke-width="3" stroke-linecap="round"/><path class="tear" d="M23 43q-9 13 0 13t0-13" fill="#64b5f6"/><path class="tear tear-right" d="M57 43q-9 13 0 13t0-13" fill="#64b5f6"/></svg>{{ feedback || (session?.solved ? '完成啦！' : '') }}</p></div></section>
       <p v-if="page === 'learn' && feedback" class="feedback" role="status">{{ feedback }}</p>
     </main>
     <main v-else-if="page === 'errors'" class="list-page"><h1>再练一练</h1><div v-if="!saved.errors.length" class="empty"><span>🌱</span><h2>还没有需要复习的题目</h2><button class="primary" @click="start()">开始练习 →</button></div><template v-else><div class="error-grid"><div v-for="item in visibleErrors" :key="key(item)"><Decomposition v-if="item.kind === 'decompose'" :total="result(item)" :known="item.blank === 'a' ? item.b : item.a" :blank-left="item.blank === 'a'" value="?" /><template v-else>{{ equationText(item) }}</template></div></div><div class="pager"><button :disabled="errorPage === 0" @click="errorPage--">← 上一页</button><span>{{ errorPage + 1 }} / {{ errorPages }}</span><button :disabled="errorPage + 1 >= errorPages" @click="errorPage++">下一页 →</button></div><button class="primary review-start" @click="start(true)">复习 {{ Math.min(ROUND_SIZE, saved.errors.length) }} 道题 →</button></template></main>

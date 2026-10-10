@@ -41,6 +41,29 @@ export function createFeedbackAudio() {
       })
     } catch { /* Visual feedback remains available without device audio. */ }
   }
+  async function tap(digit: number) {
+    stop()
+    const current = generation
+    try {
+      context ??= new AudioContext()
+      if (context.state === 'suspended') await context.resume()
+      if (current !== generation || context.state !== 'running') return
+      const oscillator = context.createOscillator()
+      const gain = context.createGain()
+      oscillator.connect(gain); gain.connect(context.destination)
+      oscillator.type = 'sine'
+      const start = context.currentTime
+      const frequency = 600 + digit * 35
+      oscillator.frequency.setValueAtTime(frequency, start)
+      oscillator.frequency.exponentialRampToValueAtTime(frequency * .7, start + .075)
+      gain.gain.setValueAtTime(.001, start)
+      gain.gain.linearRampToValueAtTime(.12, start + .005)
+      gain.gain.exponentialRampToValueAtTime(.001, start + .085)
+      active.add(oscillator)
+      oscillator.onended = () => { active.delete(oscillator); oscillator.disconnect(); gain.disconnect() }
+      oscillator.start(start); oscillator.stop(start + .09)
+    } catch { /* Typing still works when device audio is unavailable. */ }
+  }
   function dispose() { stop(); if (context) void context.close().catch(() => {}); context = null }
-  return { play, stop, dispose }
+  return { play, tap, stop, dispose }
 }
